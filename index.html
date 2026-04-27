@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Student Portal</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: { extend: { colors: { brand: { 50: 'var(--brand-50)', 400: 'var(--brand-400)', 500: 'var(--brand-500)', 600: 'var(--brand-600)', 950: 'var(--brand-950)' } } } }
+        }
+    </script>
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .notice-text { white-space: pre-line; overflow-wrap: anywhere; word-break: normal; }
+        .notice-link { color: var(--brand-600); text-decoration: underline; font-weight: 600; }
+        .dark .notice-link { color: var(--brand-400); }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-100 transition-colors duration-300">
+
+    <div class="max-w-6xl mx-auto px-6 py-8">
+        <header class="mb-6 flex justify-between items-center">
+            <h1 class="text-3xl font-extrabold tracking-tight">Daily Notices</h1>
+            <div class="flex items-center gap-3">
+                <div class="flex gap-2 p-1.5 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
+                    <button onclick="setTheme('teal')" class="w-5 h-5 rounded-full bg-teal-500"></button>
+                    <button onclick="setTheme('indigo')" class="w-5 h-5 rounded-full bg-indigo-500"></button>
+                </div>
+                <button onclick="toggleDarkMode()" class="p-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-sm transition-colors">
+                    <span id="theme-icon">🌙</span>
+                </button>
+            </div>
+        </header>
+
+        <nav id="category-nav" class="flex gap-2 overflow-x-auto no-scrollbar mb-8 pb-2"></nav>
+
+        <div id="loading" class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div class="h-48 bg-slate-200 dark:bg-slate-800 animate-pulse rounded-3xl"></div>
+            <div class="h-48 bg-slate-200 dark:bg-slate-800 animate-pulse rounded-3xl"></div>
+        </div>
+
+        <div id="notices-container" class="grid grid-cols-1 md:grid-cols-2 gap-6"></div>
+    </div>
+
+    <script>
+        const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwI4PvxZK6mtPiunUR7LFT-QdXMPbZMzmHEoJr80UnRbH8QappMiZUzZpg0w0CTOWDY/dev';
+        let rawData = {};
+        let currentTab = "School Notices";
+
+        function setTheme(colorName) {
+            const themes = {
+                teal: { 50: '#f0fdfa', 400: '#2dd4bf', 500: '#14b8a6', 600: '#0d9488', 950: '#042f2e' },
+                indigo: { 50: '#eef2ff', 400: '#818cf8', 500: '#6366f1', 600: '#4f46e5', 950: '#1e1b4b' }
+            };
+            const theme = themes[colorName] || themes.teal;
+            const root = document.documentElement;
+            Object.keys(theme).forEach(k => root.style.setProperty(`--brand-${k}`, theme[k]));
+            localStorage.userColor = colorName;
+        }
+
+        function toggleDarkMode() {
+            const isDark = document.documentElement.classList.toggle('dark');
+            localStorage.theme = isDark ? 'dark' : 'light';
+            document.getElementById('theme-icon').innerText = isDark ? '☀️' : '🌙';
+        }
+
+        async function loadNotices() {
+            try {
+                const response = await fetch(SCRIPT_URL);
+                const result = await response.json();
+                
+                // Hide loader immediately once we get a response
+                document.getElementById('loading').classList.add('hidden');
+
+                if (!result.success || !result.data) {
+                    console.error("API Error:", result.error);
+                    document.getElementById('notices-container').innerHTML = `<div class="col-span-full text-center py-10 text-red-500 font-bold">Failed to load data. Please check the Script URL and permissions.</div>`;
+                    return;
+                }
+                
+                rawData = result.data;
+
+                // If "School Notices" isn't in the new data, pick the first available key
+                if (!rawData[currentTab]) {
+                    currentTab = Object.keys(rawData)[0];
+                }
+
+                renderNav();
+                renderNotices();
+            } catch (err) { 
+                console.error("Fetch Error:", err);
+                document.getElementById('loading').classList.add('hidden');
+                document.getElementById('notices-container').innerHTML = `<div class="col-span-full text-center py-10 text-red-500 font-bold italic">Connection error. Please refresh.</div>`;
+            }
+        }
+
+        function renderNav() {
+            const nav = document.getElementById('category-nav');
+            const categories = Object.keys(rawData);
+            if (categories.length === 0) return;
+
+            // Define your clean names here
+            const nameMap = {
+                "Daily Notices- HHHS": "School Notices",
+                "House Leaders / SRC": "House / SRC" // Example of another shortening
+            };
+
+            nav.innerHTML = categories.map(cat => {
+                // Use the mapped name if it exists, otherwise use the original
+                const displayName = nameMap[cat] || cat;
+
+                return `
+                    <button onclick="switchTab('${cat}')" class="px-5 py-2.5 rounded-full text-sm font-bold whitespace-nowrap transition-all ${currentTab === cat ? 'bg-brand-500 text-white shadow-lg' : 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-500'}">
+                        ${displayName}
+                    </button>
+                `;
+            }).join('');
+        }
+
+        function switchTab(cat) {
+            currentTab = cat;
+            renderNav();
+            renderNotices();
+        }
+
+        function renderNotices() {
+            const container = document.getElementById('notices-container');
+            const notices = rawData[currentTab] || [];
+            
+            if (notices.length === 0) {
+                container.innerHTML = `<div class="col-span-full py-20 text-center text-slate-400 font-medium">No notices for ${currentTab} today.</div>`;
+                return;
+            }
+
+            container.innerHTML = notices.map(item => {
+                const urlRegex = /(https?:\/\/[^\s]+)/g;
+                const linkedContent = item.content.replace(urlRegex, url => `<a href="${url}" target="_blank" class="notice-link">${url}</a>`);
+                
+                return `
+                    <div class="flex flex-col bg-white dark:bg-slate-900 p-8 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-800">
+                        <div class="flex-1">
+                            <h2 class="text-xl font-bold text-brand-600 dark:text-brand-400 notice-text mb-4">${item.subject}</h2>
+                            <p class="text-slate-700 dark:text-slate-300 leading-relaxed notice-text text-base">${linkedContent}</p>
+                        </div>
+                        <div class="flex items-center justify-between pt-6 mt-6 border-t border-slate-100 dark:border-slate-800">
+                            <div class="flex items-center gap-3">
+                                <div class="w-8 h-8 rounded-full bg-brand-50 dark:bg-brand-950 flex items-center justify-center text-[10px] font-bold text-brand-600 dark:text-brand-400">
+                                    ${item.teacher ? item.teacher.charAt(0).toUpperCase() : '?'}
+                                </div>
+                                <span class="text-xs font-bold text-slate-500 italic">${item.teacher || 'Unknown'}</span>
+                            </div>
+                            <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">${item.expiry || 'No Expiry'}</span>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        // Init settings
+        setTheme(localStorage.userColor || 'teal');
+        if (localStorage.theme === 'dark') {
+            document.documentElement.classList.add('dark');
+            document.getElementById('theme-icon').innerText = '☀️';
+        }
+        
+        loadNotices();
+    </script>
+</body>
+</html>
